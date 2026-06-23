@@ -592,24 +592,47 @@ def exit_after(seconds, default=None):
     In this case, return the value of 'default' (default: None)."""
 
     def handler(q, func, args, kwargs):
-        q.put(func(*args, **kwargs))
+        try:
+            q.put(func(*args, **kwargs))
+        except Exception:
+            # Ensure child always puts something to avoid blocking the parent
+            try:
+                q.put(None)
+            except Exception:
+                pass
 
     def decorator(func):
         def wraps(*args, **kwargs):
+            # Use a safe default structure if None was provided
+            fallback_default = {} if default is None else default
+
             q = Queue()
             p = Process(target=handler, args=(q, func, args, kwargs))
-            p.start()
+            try:
+                p.start()
+            except Exception:
+                # If starting the process fails (e.g. pickling local handler),
+                # run the function synchronously as a safe fallback.
+                try:
+                    return func(*args, **kwargs)
+                except Exception:
+                    return fallback_default
+
             p.join(timeout=seconds)
             if not p.is_alive():
-                return q.get()
+                try:
+                    # Prefer non-blocking get to avoid hanging if child failed to put
+                    return q.get_nowait()
+                except Exception:
+                    return fallback_default
 
             p.terminate()
             p.join(timeout=0.1)
             if p.is_alive():
-                # Kill in case processes doesn't terminate
+                # Kill in case process doesn't terminate
                 # Happens with cases like broken NFS connections
                 p.kill()
-            return default
+            return fallback_default
 
         return wraps
 

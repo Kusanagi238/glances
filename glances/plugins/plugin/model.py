@@ -197,11 +197,12 @@ class GlancesPluginModel:
         """Return true if plugin is enabled."""
         if not plugin_name:
             plugin_name = self.plugin_name
-        try:
-            d = getattr(self.args, 'disable_' + plugin_name)
-        except AttributeError:
-            d = getattr(self.args, 'enable_' + plugin_name, True)
-        return d is False
+        # If an explicit disable_<plugin> flag exists, respect it (True means disabled)
+        disable = getattr(self.args, 'disable_' + plugin_name, None)
+        if disable is not None:
+            return not disable
+        # Otherwise fall back to enable_<plugin> (default to True)
+        return getattr(self.args, 'enable_' + plugin_name, True)
 
     def is_disabled(self, plugin_name=None):
         """Return true if plugin is disabled."""
@@ -1120,7 +1121,7 @@ class GlancesPluginModel:
         """
 
         def wrapper(self, *args, **kw):
-            if self.is_enabled() and (self.refresh_timer.finished() or self.stats == self.get_init_value):
+            if self.is_enabled() and (self.refresh_timer.finished() or self.stats == self.get_init_value()):
                 # Run the method
                 ret = fct(self, *args, **kw)
                 # Reset the timer

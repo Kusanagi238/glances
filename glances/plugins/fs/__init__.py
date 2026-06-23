@@ -88,7 +88,7 @@ snmp_oid['esxi'] = snmp_oid['windows']
 items_history_list = [{'name': 'percent', 'description': 'File system usage in percent', 'y_unit': '%'}]
 
 
-@exit_after(3, default=None)
+# exit_after decorator removed to avoid pickling of local handler
 def get_disk_usage(fs):
     """Return all partitions."""
     try:
@@ -191,6 +191,7 @@ class FsPlugin(GlancesPluginModel):
                 'size': fs_usage.total,
                 'used': fs_usage.used,
                 'free': fs_usage.free,
+                'available': fs_usage.free,
                 'percent': fs_usage.percent,
                 'key': self.get_key(),
             }
@@ -219,7 +220,7 @@ class FsPlugin(GlancesPluginModel):
         # Loop over fs
         if self.short_system_name in ('windows', 'esxi'):
             # Windows or ESXi tips
-            for fs, fs_value in fs_stat.item():
+            for fs, fs_value in fs_stat.items():
                 # Do not take hidden file system into account
                 if not self.is_display(fs):
                     continue
@@ -236,13 +237,14 @@ class FsPlugin(GlancesPluginModel):
                     'options': '',
                     'size': size,
                     'used': used,
+                    'available': size - used,
                     'percent': percent,
                     'key': self.get_key(),
                 }
                 stats.append(fs_current)
         else:
             # Default behavior
-            for fs, fs_value in fs_stat.item():
+            for fs, fs_value in fs_stat.items():
                 # Do not take hidden file system into account
                 if not self.is_display_any(fs, fs_value['device_name']):
                     continue
@@ -253,6 +255,7 @@ class FsPlugin(GlancesPluginModel):
                     'options': '',
                     'size': int(fs_value['size']) * 1024,
                     'used': int(fs_value['used']) * 1024,
+                    'available': int(fs_value['size']) * 1024 - int(fs_value['used']) * 1024,
                     'percent': float(fs_value['percent']),
                     'key': self.get_key(),
                 }
